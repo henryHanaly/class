@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingStatus {
+  pending_payment
+  confirmed
+  payment_failed
+  cancelled
+}
+
+enum PaymentResult {
+  success
+  fail
+}
+
+model Parent {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String
+  email    String  @unique @db.Citext
+  children Child[]
+
+  @@map("parents")
+}
+
+model Child {
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentId String    @map("parent_id") @db.Uuid
+  name     String
+  grade    String?
+  parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([parentId])
+  @@map("children")
+}
+
+model TrialClass {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subject   String
+  startsAt  DateTime  @map("starts_at") @db.Timestamptz(6)
+  capacity  Int       @default(4) @db.SmallInt
+  priceCents Int      @default(0) @map("price_cents") // list price in minor units (e.g. cents); one implied currency
+  bookings  Booking[]
+
+  @@map("trial_classes")
+}
+
+model Booking {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  childId   String        @map("child_id") @db.Uuid
+  classId   String        @map("class_id") @db.Uuid
+  status    BookingStatus @default(pending_payment)
+  priceCents Int          @default(0) @map("price_cents") // amount charged, snapshotted from the class at booking time
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  child           Child            @relation(fields: [childId], references: [id], onDelete: Restrict)
+  trialClass      TrialClass       @relation(fields: [classId], references: [id], onDelete: Restrict)
+  paymentAttempts PaymentAttempt[]
+
+  @@index([classId, status])
+  @@map("bookings")
+}
+
+model PaymentAttempt {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId   String        @map("booking_id") @db.Uuid
+  result      PaymentResult
+  providerRef String?       @map("provider_ref")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("payment_attempts")
+}

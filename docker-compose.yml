@@ -1,0 +1,73 @@
+# Local dev + e2e dependencies. The app itself can run on the host (npm run
+# start:dev) against these, or as the `api` service below.
+#
+#   docker compose up -d db redis        # deps only, run the app on the host
+#   docker compose up --build            # everything: db, redis, api, web
+#   docker compose up --build db redis api   # backend only, no frontend
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d  # e2e
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ottodot
+      POSTGRES_PASSWORD: ottodot
+      POSTGRES_DB: ottodot
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ottodot -d ottodot"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ottodot:ottodot@db:5432/ottodot?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: "3000"
+      PAYMENT_MOCK_MODE: "true"
+      PAYMENT_MOCK_DELAY_MS: "150"
+      PAYMENT_MOCK_FAIL_RATE: "0"
+      PG_LOCK_TIMEOUT_MS: "3000"
+      PG_POOL_SIZE: "20"
+      IDEMPOTENCY_TTL_S: "86400"
+      IDEMPOTENCY_FAIL_MODE: "open"
+      CORS_ORIGIN: "http://localhost:5173"
+    ports:
+      - "3000:3000"
+    # CMD in the Dockerfile runs `prisma migrate deploy` before starting.
+    # Seed once after first boot:  docker compose exec api npx prisma db seed
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+    # nginx serves the built React app and proxies /api/* to the api service.
+    # Open http://localhost:5173
+
+volumes:
+  db_data:

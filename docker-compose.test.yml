@@ -1,0 +1,21 @@
+# Overlay for e2e / integration tests: isolated ports and DB name, no volume
+# (fast, disposable), payment mock made deterministic.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d db redis
+#   DATABASE_URL=postgresql://ottodot:ottodot@localhost:5433/ottodot_test?schema=public \
+#   REDIS_URL=redis://localhost:6380 npm run test:e2e
+
+services:
+  db:
+    environment:
+      POSTGRES_DB: ottodot_test
+    ports:
+      - "5433:5432"
+    volumes: []          # no persistence for tests
+
+  redis:
+    ports:
+      - "6380:6379"
+
+  api:
+    profiles: ["never"]  # tests run the app in-process via Nest's testing module

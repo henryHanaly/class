@@ -1,0 +1,120 @@
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color: #1a1a1a;
+  background: #fafafa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+h1 {
+  font-size: 1.4rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+button {
+  cursor: pointer;
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+nav button:disabled {
+  background: #fff;
+  color: #1a1a1a;
+}
+
+ul.classes {
+  list-style: none;
+  padding: 0;
+}
+
+ul.classes li {
+  padding: 0.35rem 0;
+}
+
+ul.classes li.full {
+  color: #999;
+}
+
+ul.classes label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #b00020;
+}
+
+.ok {
+  color: #0a7d28;
+  font-weight: 600;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+code {
+  background: #eee;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}

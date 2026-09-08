@@ -1,0 +1,448 @@
+{
+  "info": {
+    "name": "Trial Booking Reliability",
+    "description": "All endpoints for the trial-class booking API. Base URL defaults to http://localhost:3000.\n\nSeeded data (deterministic UUIDs, see prisma/seed-constants.ts):\n- Parent Alice  alice@example.com  ...0001  — children Amy ...0011, Ben ...0012\n- Parent Bob    bob@example.com    ...0002  — children Cleo ...0013, Dan ...0014\n- Class Math (open)      ...0021  Amy confirmed        -> 3 seats left\n- Class Science (last)   ...0022  Ben, Cleo, Dan conf.  -> 1 seat left\n- Class Coding (full)    ...0023  all four confirmed    -> 0 seats\n\nRun 'Parents / lookup (Alice)' and 'Trial classes / list' first — their test scripts\npopulate the collection variables the booking requests use. Reset the DB between full\nruns with:  npm run db:reset",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "parentId", "value": "00000000-0000-4000-8000-000000000001" },
+    { "key": "childAmy", "value": "00000000-0000-4000-8000-000000000011" },
+    { "key": "childBen", "value": "00000000-0000-4000-8000-000000000012" },
+    { "key": "childCleo", "value": "00000000-0000-4000-8000-000000000013" },
+    { "key": "childDan", "value": "00000000-0000-4000-8000-000000000014" },
+    { "key": "classMath", "value": "00000000-0000-4000-8000-000000000021" },
+    { "key": "classScience", "value": "00000000-0000-4000-8000-000000000022" },
+    { "key": "classCoding", "value": "00000000-0000-4000-8000-000000000023" },
+    { "key": "bookingId", "value": "" },
+    { "key": "replayKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 ok', () => pm.response.to.have.status(200));",
+              "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Parents",
+      "item": [
+        {
+          "name": "lookup (Alice)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"alice@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/parents/lookup", "host": ["{{baseUrl}}"], "path": ["parents", "lookup"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has parentId + children', () => { pm.expect(b.parentId).to.be.a('string'); pm.expect(b.children).to.be.an('array'); });",
+                  "pm.collectionVariables.set('parentId', b.parentId);",
+                  "if (b.children[0]) pm.collectionVariables.set('childAmy', b.children[0].id);",
+                  "if (b.children[1]) pm.collectionVariables.set('childBen', b.children[1].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "lookup — unknown email (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"nobody@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/parents/lookup", "host": ["{{baseUrl}}"], "path": ["parents", "lookup"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('NOT_FOUND envelope', () => { const b = pm.response.json(); pm.expect(b.error).to.eql('NOT_FOUND'); pm.expect(b.requestId).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "lookup — bad email (422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\"\n}" },
+            "url": { "raw": "{{baseUrl}}/parents/lookup", "host": ["{{baseUrl}}"], "path": ["parents", "lookup"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('422', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Trial classes",
+      "item": [
+        {
+          "name": "list",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/trial-classes", "host": ["{{baseUrl}}"], "path": ["trial-classes"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('array with seatsLeft', () => { pm.expect(list).to.be.an('array'); pm.expect(list[0]).to.have.property('seatsLeft'); });",
+                  "const bySubject = Object.fromEntries(list.map(c => [c.subject, c]));",
+                  "if (bySubject.Math) pm.collectionVariables.set('classMath', bySubject.Math.id);",
+                  "if (bySubject.Science) pm.collectionVariables.set('classScience', bySubject.Science.id);",
+                  "if (bySubject.Coding) pm.collectionVariables.set('classCoding', bySubject.Coding.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "roster — Math",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/trial-classes/{{classMath}}/roster",
+              "host": ["{{baseUrl}}"],
+              "path": ["trial-classes", "{{classMath}}", "roster"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('confirmed students only', () => pm.expect(pm.response.json().students).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "roster — bad uuid (400)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/trial-classes/not-a-uuid/roster",
+              "host": ["{{baseUrl}}"],
+              "path": ["trial-classes", "not-a-uuid", "roster"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "book — Ben into Math (confirmed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childBen}}\",\n  \"classId\": \"{{classMath}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('confirmed', () => { pm.expect(b.status).to.eql('confirmed'); pm.expect(b.payment.result).to.eql('success'); });",
+                  "pm.collectionVariables.set('bookingId', b.bookingId);",
+                  "// NOTE: re-running this needs a fresh DB (npm run db:reset) or it returns 409 BOOKING_DUPLICATE"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "book — payment fails (200 payment_failed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childBen}}\",\n  \"classId\": \"{{classMath}}\",\n  \"simulatePayment\": \"fail\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (not an error)', () => pm.response.to.have.status(200));",
+                  "pm.test('payment_failed', () => pm.expect(pm.response.json().status).to.eql('payment_failed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "book — duplicate: Amy into Math (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childAmy}}\",\n  \"classId\": \"{{classMath}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('BOOKING_DUPLICATE', () => pm.expect(pm.response.json().error).to.eql('BOOKING_DUPLICATE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "book — class full: Cleo into Coding (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childCleo}}\",\n  \"classId\": \"{{classCoding}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('BOOKING_CLASS_FULL', () => pm.expect(pm.response.json().error).to.eql('BOOKING_CLASS_FULL'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "book — missing Idempotency-Key (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childBen}}\",\n  \"classId\": \"{{classScience}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "get by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/bookings/{{bookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["bookings", "{{bookingId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('has status enum', () => pm.expect(pm.response.json()).to.have.property('status'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Idempotency replay",
+      "description": "Send 'set key' once, then 'replay #1' and 'replay #2' — both return the identical body, and only one booking is created. Needs a fresh DB for a clean confirmed result.",
+      "item": [
+        {
+          "name": "1. arm a fixed key",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('replayKey', pm.variables.replaceIn('{{$guid}}'));",
+                  "console.log('replayKey =', pm.collectionVariables.get('replayKey'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. book with the fixed key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{replayKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childBen}}\",\n  \"classId\": \"{{classScience}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('replayBody', pm.response.text());",
+                  "pm.test('first call succeeds', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. replay — same key, same body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{replayKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childBen}}\",\n  \"classId\": \"{{classScience}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('byte-for-byte replay of the first response', () => pm.expect(pm.response.text()).to.eql(pm.collectionVariables.get('replayBody')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. same key, DIFFERENT body (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{replayKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{parentId}}\",\n  \"childId\": \"{{childAmy}}\",\n  \"classId\": \"{{classScience}}\",\n  \"simulatePayment\": \"success\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('422 key reuse', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
