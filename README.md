@@ -4,6 +4,14 @@ Trial-class booking with a mocked payment, for the Ottodot take-home. The design
 write-ups are in [`claude/HLD.md`](claude/HLD.md) (what and why) and
 [`claude/LLD.md`](claude/LLD.md) (how it's built).
 
+## Time spent
+
+The brief suggests about 4 hours, and that's the cap I worked to for the core:
+the API, the transaction/seat-lock design, idempotency, the unit suite and the
+HLD/LLD write-ups. Anything after that — extra test coverage, the frontend
+polish, docs cleanup — was done outside the time box and isn't counted against
+the estimate.
+
 ## Running it
 
 ### What you need
