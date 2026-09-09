@@ -180,6 +180,75 @@ describe('IdempotencyInterceptor', () => {
     );
   });
 
+  it('hashes an absent request body as an empty object', async () => {
+    const { interceptor, redis } = setup();
+    redis.get.mockResolvedValue(null);
+    redis.set.mockResolvedValue('OK');
+    const req = {
+      id: 'req-1',
+      body: undefined,
+      header: (n: string) =>
+        n.toLowerCase() === 'idempotency-key' ? KEY : undefined,
+    };
+    const ctx = {
+      switchToHttp: () => ({
+        getRequest: () => req,
+        getResponse: () => ({ statusCode: 200 }),
+      }),
+    };
+
+    await invoke(interceptor, ctx, makeHandler({ ok: true }));
+
+    expect(JSON.parse(redis.set.mock.calls[0][1] as string).bodyHash).toBe(
+      bodyHash({}),
+    );
+  });
+
+  it('retries from scratch when the claim is lost but the entry then vanishes', async () => {
+    const { interceptor, redis } = setup();
+    redis.get
+      .mockResolvedValueOnce(null) // initial miss
+      .mockResolvedValueOnce(null) // after losing claim: entry gone
+      .mockResolvedValueOnce(null); // recursion: miss again
+    redis.set
+      .mockResolvedValueOnce(null) // first claim lost
+      .mockResolvedValueOnce('OK') // recursion claim won
+      .mockResolvedValueOnce('OK'); // store
+    const handler = makeHandler({ bookingId: 'b1' });
+
+    const result = await invoke(interceptor, makeCtx(KEY), handler);
+
+    expect(result).toEqual({ bookingId: 'b1' });
+    expect(handler.spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards the in-progress entry when the handler throws, then rethrows', async () => {
+    const { interceptor, redis } = setup();
+    redis.get.mockResolvedValue(null);
+    redis.set.mockResolvedValueOnce('OK'); // claim
+    redis.del.mockResolvedValue(1);
+    const boom = new Error('handler failed');
+    const { throwError } = jest.requireActual('rxjs') as typeof import('rxjs');
+
+    await expect(
+      invoke(interceptor, makeCtx(KEY), { handle: () => throwError(() => boom) }),
+    ).rejects.toBe(boom);
+    expect(redis.del).toHaveBeenCalledWith(`idem:${KEY}`);
+  });
+
+  it('swallows a Redis failure raised while discarding', async () => {
+    const { interceptor, redis } = setup();
+    redis.get.mockResolvedValue(null);
+    redis.set.mockResolvedValueOnce('OK');
+    redis.del.mockRejectedValue(new Error('redis down'));
+    const boom = new Error('handler failed');
+    const { throwError } = jest.requireActual('rxjs') as typeof import('rxjs');
+
+    await expect(
+      invoke(interceptor, makeCtx(KEY), { handle: () => throwError(() => boom) }),
+    ).rejects.toBe(boom);
+  });
+
   it('fails closed when configured: 503', async () => {
     const { interceptor, redis } = setup('closed');
     redis.get.mockRejectedValue(new Error('ECONNREFUSED'));

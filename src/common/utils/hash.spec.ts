@@ -28,6 +28,13 @@ describe('hash — bodyHash', () => {
     expect(bodyHash({ ...base, extra: 'x' } as never)).toBe(bodyHash(base));
   });
 
+  it('canonical json defaults every missing field to null', () => {
+    expect(canonicalBookingJson({})).toBe(
+      '{"parentId":null,"childId":null,"classId":null,"simulatePayment":null}',
+    );
+    expect(typeof bodyHash({})).toBe('string');
+  });
+
   it('canonical json uses a fixed key order', () => {
     expect(canonicalBookingJson(base)).toBe(
       '{"parentId":"p1","childId":"c1","classId":"cl1","simulatePayment":"success"}',

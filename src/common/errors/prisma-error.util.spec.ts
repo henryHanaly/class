@@ -37,6 +37,11 @@ describe('isUniqueViolationOn', () => {
     expect(isUniqueViolationOn(known('P2003'), INDEX)).toBe(false);
     expect(isUniqueViolationOn(new Error('P2002'), INDEX)).toBe(false);
   });
+
+  it('is false for P2002 without usable target metadata', () => {
+    expect(isUniqueViolationOn(known('P2002'), INDEX)).toBe(false);
+    expect(isUniqueViolationOn(known('P2002', { target: 42 }), INDEX)).toBe(false);
+  });
 });
 
 describe('isLockTimeout', () => {
@@ -61,5 +66,25 @@ describe('isLockTimeout', () => {
   it('is false for an unrelated known error', () => {
     expect(isLockTimeout(known('P2002', { target: ['x'] }))).toBe(false);
     expect(isLockTimeout(new Error('boom'))).toBe(false);
+  });
+
+  it('is true for P2028 with no meta at all when the message matches', () => {
+    expect(
+      isLockTimeout(known('P2028', undefined, 'canceling statement due to lock timeout')),
+    ).toBe(true);
+  });
+
+  it('is false for P2028 that is not actually a lock timeout', () => {
+    expect(isLockTimeout(known('P2028', { reason: 'other' }, 'tx closed'))).toBe(
+      false,
+    );
+  });
+
+  it('is true for P2010 whose message matches lock_timeout wording', () => {
+    expect(isLockTimeout(known('P2010', {}, 'lock_timeout hit'))).toBe(true);
+  });
+
+  it('is false for a null/undefined error', () => {
+    expect(isLockTimeout(undefined)).toBe(false);
   });
 });

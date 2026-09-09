@@ -8,8 +8,21 @@ const tsPreset = {
 
 const config: Config = {
   rootDir: '.',
-  collectCoverageFrom: ['src/**/*.(t|j)s'],
+  collectCoverageFrom: [
+    'src/**/*.(t|j)s',
+    // Wiring and framework-only files carry no branching logic to test.
+    '!src/main.ts',
+    '!src/health.controller.ts',
+    '!src/**/*.module.ts',
+    '!src/**/dto/**',
+    '!src/**/*.types.ts',
+    '!src/common/request-context.ts',
+    '!src/common/redis/redis.constants.ts',
+  ],
   coverageDirectory: './coverage',
+  coverageThreshold: {
+    global: { branches: 100, functions: 100, lines: 100, statements: 100 },
+  },
   projects: [
     {
       ...tsPreset,
